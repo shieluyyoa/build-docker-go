@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 func main() {
@@ -19,6 +20,10 @@ func main() {
 
 func parent() {
 	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags:   syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET,
+		Unshareflags: syscall.CLONE_NEWNS,
+	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -27,9 +32,15 @@ func parent() {
 		fmt.Println("ERROR", err)
 		os.Exit(1)
 	}
+
 }
 
 func child() {
+	syscall.Sethostname([]byte("container"))
+	syscall.Chroot("/ubuntu-base-16.04.6-base-arm64")
+	syscall.Chdir("/")
+	syscall.Mount("proc", "proc", "proc", 0, "")
+
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -39,6 +50,8 @@ func child() {
 		fmt.Println("ERROR", err)
 		os.Exit(1)
 	}
+
+	syscall.Unmount("/proc", 0)
 }
 
 func must(err error) {
