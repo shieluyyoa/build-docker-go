@@ -36,10 +36,35 @@ func parent() {
 }
 
 func child() {
+	pwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("pwd", err)
+		return
+	}
+	path := pwd + "/ubuntu-base-16.04.6-base-arm64"
+
 	syscall.Sethostname([]byte("container"))
-	syscall.Chroot("/ubuntu-base-16.04.6-base-arm64")
+	syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, "")
+
+	if err := syscall.Mount(path, path, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
+		fmt.Println("Mount", err)
+		return
+	}
+
+	if err := os.MkdirAll(path+"/.old", 0700); err != nil {
+		fmt.Println("mkdir", err)
+		return
+	}
+
+	err = syscall.PivotRoot(path, path+"/.old")
+	if err != nil {
+		fmt.Println("pivot root ", err)
+		return
+	}
+
 	syscall.Chdir("/")
-	syscall.Mount("proc", "proc", "proc", 0, "")
+	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
+	syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
 
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	cmd.Stdin = os.Stdin
